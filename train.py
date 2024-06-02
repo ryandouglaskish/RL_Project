@@ -175,7 +175,7 @@ def set_options(args):
 if __name__ == "__main__":
 
     # Environment setup
-    args = {'experiment_id':1,
+    args = {'experiment_id':2,
             'data_mode': 'standard',
             'data_sample_nrows': None,
             'initial_capital': 10000,
@@ -185,8 +185,8 @@ if __name__ == "__main__":
             'unrealized_gains_discount': 0.95,
             'log_reward': True,
             'batch_size': 32,
-            'episodes': 3,
-            'time_steps': 100,
+            'episodes': 2,
+            'time_steps': 10,
             }
     opt = set_options(args)
 
