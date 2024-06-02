@@ -46,7 +46,7 @@ class BitcoinTradingEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(3)  # 0: hold, 1: buy, 2: sell
         self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.window_size * len(self.data.columns),), dtype=np.float32)
         
-        self.current_step = 0
+        self.current_step = 0 # initial step
         self.done = False
         self.bitcoin_holdings = 0
         self.current_capital = opt.initial_capital
@@ -82,7 +82,9 @@ class BitcoinTradingEnv(gym.Env):
         if self.log_reward:
             reward = np.log(total_asset_value / self.last_total_asset_value)
         else:
-            reward = total_asset_value - self.last_total_asset_value
+            #reward = (total_asset_value - self.last_total_asset_value) / self.initial_capital # scale by initial capital
+            reward = (total_asset_value - self.last_total_asset_value)
+
         self.last_total_asset_value = total_asset_value
         self.performance.append((self.current_step, self.current_capital, self.bitcoin_holdings, unrealized_value, self.last_total_asset_value))        
        
@@ -98,9 +100,12 @@ class BitcoinTradingEnv(gym.Env):
             return amount * self.transaction_fee
         return 0
 
-    def reset(self):
-        #self.current_step = self.window_size - 1
-        self.current_step = random.randint(self.window_size, len(self.data) - self.window_size - 1)
+    def reset(self, start_step=None):
+        #self.current_step = self.window_size - 1 # Start from the first data point
+        if start_step:
+            self.current_step = start_step
+        else:
+            self.current_step = random.randint(self.window_size, len(self.data) - self.window_size - 1)
         self.current_capital = self.initial_capital
         self.bitcoin_holdings = 0
         self.done = False

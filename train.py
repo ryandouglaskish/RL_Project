@@ -4,12 +4,15 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import time
 
+from ansi import orange, green, cyan, red
 
 from bitcoin_env import BitcoinTradingEnv
 from tf_model1 import DQNAgent
 
 def train(opt):
+    start_time = time.time()
     # save all opts that are not data
     with open(f"experiments/{opt.experiment_id}/opts.txt", 'w') as f:
         for key, val in vars(opt).items():
@@ -34,14 +37,14 @@ def train(opt):
         state = np.reshape(state, [1, state_size])
         
         total_reward = 0
-        for time in range(opt.time_steps):
+        for time_step in range(opt.time_steps):
             # Agent takes action
             action = agent.act(state)
             
             # Environment responds to action
             next_state, reward, done, _ = env.step(action)
             
-            reward = reward / opt.initial_capital
+            reward = reward
             # Adjust reward if episode ends
             reward = reward if not done else -10
             total_reward += reward
@@ -137,7 +140,39 @@ def train(opt):
                                    'episode_capitals': episode_capitals,
                                    'episode_holdings': episode_holdings})
     episode_performances_df.to_csv(f"experiments/{opt.experiment_id}/episode_performances_{e}.csv", index=False)
+
+    orange(f"Training took {time.time() - start_time} seconds")
+
+
+# TODO: keep track of each episode's performance metrics for each time step, and plot on one graph
+def validate_agent(env, agent, start_step, episodes=10):
+    total_rewards = []
+    total_net_worths = []
     
+    for e in tqdm(range(1, episodes+1)):
+        state = env.reset(start_step=start_step)
+        state = np.reshape(state, [1, env.observation_space.shape[0]])
+        
+        total_reward = 0
+        done = False
+        
+        while not done:
+            action = agent.act(state)
+            next_state, reward, done, _ = env.step(action)
+            next_state = np.reshape(next_state, [1, env.observation_space.shape[0]])
+            total_reward += reward
+            state = next_state
+        
+        total_rewards.append(total_reward)
+        total_net_worths.append(env.last_total_asset_value)
+    
+    avg_reward = np.mean(total_rewards)
+    avg_net_worth = np.mean(total_net_worths)
+    
+    print(f"Validation - Avg Reward: {avg_reward}, Avg Net Worth: {avg_net_worth}")
+    
+
+    return total_rewards, total_net_worths
 
 class Options:
     def __init__(self) -> None:
@@ -175,7 +210,7 @@ def set_options(args):
 if __name__ == "__main__":
 
     # Environment setup
-    args = {'experiment_id':2,
+    args = {'experiment_id':3,
             'data_mode': 'standard',
             'data_sample_nrows': None,
             'initial_capital': 10000,
@@ -183,12 +218,20 @@ if __name__ == "__main__":
             'minimum_transaction': 0.000030,
             'window_size': 10,
             'unrealized_gains_discount': 0.95,
-            'log_reward': True,
+            'log_reward': False,
             'batch_size': 32,
-            'episodes': 2,
-            'time_steps': 10,
+            'episodes': 3,
+            'time_steps': 50,
             }
     opt = set_options(args)
 
     # Training
-    train(opt)
+    # train(opt)
+
+    # Validation - on train
+    env = BitcoinTradingEnv(opt, 'train')
+    state_size = env.observation_space.shape[0]
+    action_size = env.action_space.n
+    agent = DQNAgent(env, state_size, action_size)
+    agent.load(path=f"experiments/{opt.experiment_id}/model_weights_{opt.episodes}.weights.h5")
+    validate_agent(env, agent, start_step=100000, episodes=10)

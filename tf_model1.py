@@ -70,9 +70,10 @@ class DQNAgent:
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-    def load(self, name):
-        self.model.load_weights(name)
+    def load(self, path):
+        self.model.load_weights(path)
+        self.model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate), loss='mse')  # Recompile the model
 
-    def save(self, name):
-        self.model.save_weights(name)
+    def save(self, path):
+        self.model.save_weights(path)
 
