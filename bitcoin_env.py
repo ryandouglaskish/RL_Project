@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import sys
 import os
+import random
 from sklearn.model_selection import train_test_split
 
 class Options:
@@ -98,7 +99,8 @@ class BitcoinTradingEnv(gym.Env):
         return 0
 
     def reset(self):
-        self.current_step = self.window_size - 1
+        #self.current_step = self.window_size - 1
+        self.current_step = random.randint(self.window_size, len(self.data) - self.window_size - 1)
         self.current_capital = self.initial_capital
         self.bitcoin_holdings = 0
         self.done = False
@@ -163,6 +165,7 @@ if __name__ == "__main__":
         full_data = pd.read_csv(opt.data_path, nrows=opt.data_sample_nrows)
     else:
         full_data = pd.read_csv(opt.data_path)
+    full_data.drop(columns=['date'], inplace=True)
 
     # Split the data
     train_data, temp_data = train_test_split(full_data, train_size=0.7, shuffle=False)
