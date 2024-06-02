@@ -213,7 +213,7 @@ if __name__ == "__main__":
     args = {'experiment_id':3,
             'data_mode': 'standard',
             'data_sample_nrows': None,
-            'initial_capital': 10000,
+            'initial_capital': 1000,
             'transaction_fee': 0.0025,
             'minimum_transaction': 0.000030,
             'window_size': 10,
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     opt = set_options(args)
 
     # Training
-    # train(opt)
+    train(opt)
 
     # Validation - on train
     env = BitcoinTradingEnv(opt, 'train')
