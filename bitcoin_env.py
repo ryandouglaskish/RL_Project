@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import sys
 import os
+from sklearn.model_selection import train_test_split
 
 class Options:
     def __init__(self) -> None:
@@ -16,13 +17,21 @@ class Options:
             self.__setattr__(key, val)
 
 class BitcoinTradingEnv(gym.Env):
-    metadata = {'render.modes': ['human', 'plot']}
+    metadata = {'render_modes': ['human', 'plot']}
 
-    def __init__(self, opt):
+    def __init__(self, opt, dataset='train'):
         super(BitcoinTradingEnv, self).__init__()
 
+        self.experiment_id = opt.experiment_id
         # Load data
-        self.data = opt.data
+        if dataset == 'train':
+            self.data = opt.train_data
+        elif dataset == 'validate':
+            self.data = opt.validation_data
+        elif dataset == 'test':
+            self.data = opt.test_data
+        self.dataset = dataset
+        
         self.initial_capital = opt.initial_capital
         self.transaction_fee = opt.transaction_fee
         self.window_size = opt.window_size
@@ -30,6 +39,7 @@ class BitcoinTradingEnv(gym.Env):
         self.log_reward = opt.log_reward
         self.minimum_transaction = opt.minimum_transaction
 
+        self.render_mode
 
         # Define action and observation space
         self.action_space = gym.spaces.Discrete(3)  # 0: hold, 1: buy, 2: sell
@@ -73,8 +83,8 @@ class BitcoinTradingEnv(gym.Env):
         else:
             reward = total_asset_value - self.last_total_asset_value
         self.last_total_asset_value = total_asset_value
-        self.performance.append((self.current_step, self.current_capital, self.bitcoin_holdings, self.last_total_asset_value))
-        
+        self.performance.append((self.current_step, self.current_capital, self.bitcoin_holdings, unrealized_value, self.last_total_asset_value))        
+       
         self.current_step += 1
         if self.current_step >= len(self.data) - self.window_size + 1:
             self.done = True
@@ -99,26 +109,38 @@ class BitcoinTradingEnv(gym.Env):
     def _get_obs(self):
         return np.concatenate([self.data.iloc[self.current_step - self.window_size + 1: self.current_step + 1].values.flatten()])
 
-    def render(self, mode='human', close=False):
-        if mode == 'human':
-            print(f'Step: {self.current_step}')
-            print(f'Capital: {self.current_capital}')
-            print(f'Bitcoin Holdings: {self.bitcoin_holdings}')
-            print(f'Net Worth: {self.last_total_asset_value}')
-        elif mode == 'plot':
-            steps, capitals, holdings, net_worths = zip(*self.performance)
-            plt.plot(steps, net_worths, label='Net Worth')
-            plt.xlabel('Steps')
-            plt.ylabel('Net Worth')
-            plt.legend()
-            plt.show()
+    def render(self):
+        print(f'Step: {self.current_step}')
+        print(f'Capital: {self.current_capital}')
+        print(f'Bitcoin Holdings: {self.bitcoin_holdings}')
+        print(f'Net Worth: {self.last_total_asset_value}')
+        
+
+    def render_performance(self):
+        steps, capitals, holdings, holdings_usd, net_worths = zip(*self.performance)
+        plt.figure(figsize=(14, 7))
+        plt.plot(steps, capitals, label='Capital')
+        plt.plot(steps, holdings_usd, label='Unrealized Value')
+        plt.plot(steps, net_worths, label='Net Worth')
+        plt.xlabel('Steps')
+        plt.ylabel('Value')
+        plt.legend()
+        if not os.path.exists(f'viz/experiments/{self.experiment_id}'):
+            os.makedirs(f'viz/experiments/{self.experiment_id}')
+        plt.savefig(f'viz/experiments/{self.experiment_id}/{self.dataset} Plot.png')
+        plt.close()
+        df = pd.DataFrame({'Steps': steps, 'Capital': capitals, 'Holdings': holdings, 'Holdings USD': holdings_usd, 'Net Worth': net_worths})
+        df.to_csv(f'viz/experiments/{self.experiment_id}/{self.dataset} Performance.csv')
+
 
 if __name__ == "__main__":
 
+    if not os.path.exists('viz/experiments'):
+        os.makedirs('viz/experiments')
 
     args = {'experiment_id':1,
             'data_mode': 'standard',
-            'data_sample_nrows': 100,
+            'data_sample_nrows': 1000,
             'initial_capital': 10000,
             'transaction_fee': 0.0025,
             'minimum_transaction': 0.000030,
@@ -128,25 +150,69 @@ if __name__ == "__main__":
     opt = Options()
     opt.make_vars(args)
 
+    # if experiment already exists, delete all contents
+    if os.path.exists(f'viz/experiments/{opt.experiment_id}'):
+        for file in os.listdir(f'viz/experiments/{opt.experiment_id}'):
+            os.remove(f'viz/experiments/{opt.experiment_id}/{file}')
+
 
     data_directory = 'data/processed'
     opt.data_path = data_directory + f'/{opt.data_mode}.csv'
 
     if opt.data_sample_nrows:
-        opt.data = pd.read_csv(opt.data_path, nrows=opt.data_sample_nrows)
+        full_data = pd.read_csv(opt.data_path, nrows=opt.data_sample_nrows)
     else:
-        opt.data = pd.read_csv(opt.data_path)
+        full_data = pd.read_csv(opt.data_path)
 
-    # Example usage
-    env = BitcoinTradingEnv(opt)
-    obs = env.reset()
-    print(obs)
+    # Split the data
+    train_data, temp_data = train_test_split(full_data, train_size=0.7, shuffle=False)
+    validation_data, test_data = train_test_split(temp_data, test_size=0.5, shuffle=False)
+    print(f"Train data shape: {train_data.shape}")
+    print(f"Validation data shape: {validation_data.shape}")
+    print(f"Test data shape: {test_data.shape}")
+    opt.train_data = train_data
+    opt.validation_data = validation_data
+    opt.test_data = test_data
+
+    # Train data
+    train_env = BitcoinTradingEnv(opt, 'train')
+    
+    obs = train_env.reset()
     done = False
     while not done:
-        action = env.action_space.sample()  # Take a random action
-        obs, reward, done, _ = env.step(action)
-        env.render()
+        action = train_env.action_space.sample()  # Take a random action
+        obs, reward, done, _ = train_env.step(action)
+        train_env.render()
         if done:
-            env.render(mode='plot')
+            train_env.render_performance()
+            print("Episode finished")
+
+
+    # Validation data
+    val_env = BitcoinTradingEnv(opt, 'validate')
+    
+    obs = val_env.reset()
+    done = False
+    while not done:
+        action = val_env.action_space.sample()  # Take a random action
+        obs, reward, done, _ = val_env.step(action)
+        val_env.render()
+        if done:
+            # val_env.render(mode='plot')
+            val_env.render_performance()
+            print("Episode finished")
+
+    # Test data
+    test_env = BitcoinTradingEnv(opt, 'test')
+    
+    obs = test_env.reset()
+    # print(obs)
+    done = False
+    while not done:
+        action = test_env.action_space.sample()  # Take a random action
+        obs, reward, done, _ = test_env.step(action)
+        test_env.render()
+        if done:
+            test_env.render_performance()
             print("Episode finished")
 
