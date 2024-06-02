@@ -2,90 +2,80 @@ import gym
 from gym import spaces
 import numpy as np
 import pandas as pd
-
 class BitcoinTradingEnv(gym.Env):
-    def __init__(self, data_files, window_size=10, mode='standard', initial_balance=10000):
-        super(BitcoinTradingEnv, self).__init__()
-        
-        # Modes of data processing: 'standard', 'deltas', 'log_deltas'
-        self.mode = mode
-        
-        # Load the appropriate data file based on the mode
-        self.data = pd.read_csv(data_files[self.mode])
-        
-        # Window size for state observation
-        self.window_size = window_size
-        
-        # Initial balance
-        self.initial_balance = initial_balance
-        
-        # Transaction fee
-        self.transaction_fee = 0.0025  # 0.25%
-        
-        # Define action and observation space
-        self.action_space = spaces.Discrete(3)  # [0: Hold, 1: Buy, 2: Sell]
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(window_size, self.data.shape[1] + 3), dtype=np.float32
-        )
-        
-        # Initialize the environment
-        self.reset()
+    metadata = {'render.modes': ['human']}
 
-    def reset(self):
-        self.balance = self.initial_balance
-        self.net_worth = self.initial_balance
-        self.btc_held = 0
-        self.current_step = self.window_size
+    def __init__(self, data_files, mode='standard', initial_capital=10000, transaction_fee=0.0025, window_size=10, unrealized_gains_discount=0.95):
+        super(BitcoinTradingEnv, self).__init__()
+
+        # Load data
+        self.data = pd.read_csv(data_files[mode])
+        self.initial_capital = initial_capital
+        self.transaction_fee = transaction_fee
+        self.window_size = window_size
+        self.unrealized_gains_discount = unrealized_gains_discount
+
+        # Define action and observation space
+        self.action_space = gym.spaces.Discrete(3)  # 0: hold, 1: buy, 2: sell
+        self.observation_space = gym.spaces.Box(low=0, high=np.inf, shape=(self.window_size * len(self.data.columns),), dtype=np.float32)
+
+        self.current_step = 0
         self.done = False
-        return self._get_observation()
+        self.bitcoin_holdings = 0
+        self.current_capital = initial_capital
+        self.last_total_asset_value = initial_capital
 
     def step(self, action):
+        if self.done:
+            return self._get_obs(), 0, self.done, {}
+
         current_price = self.data.iloc[self.current_step]['close']
-        reward = 0
-        
-        # Execute the action
+        transaction_cost = self._calculate_transaction_cost(action, current_price)
+
         if action == 1:  # Buy
-            reward = self._buy(current_price)
+            if self.current_capital > transaction_cost:
+                self.bitcoin_holdings = (self.current_capital - transaction_cost) / current_price
+                self.current_capital = 0
+
         elif action == 2:  # Sell
-            reward = self._sell(current_price)
-        
-        # Move to the next step
+            if self.bitcoin_holdings > 0:
+                self.current_capital = self.bitcoin_holdings * current_price - transaction_cost
+                self.bitcoin_holdings = 0
+
+        # Calculate total asset value with discount on unrealized gains
+        unrealized_value = self.bitcoin_holdings * current_price
+        total_asset_value = self.current_capital + self.unrealized_gains_discount * unrealized_value
+        reward = total_asset_value - self.last_total_asset_value
+        self.last_total_asset_value = total_asset_value
+
         self.current_step += 1
-        if self.current_step >= len(self.data) - 1:
+        if self.current_step >= len(self.data) - self.window_size + 1:
             self.done = True
-        
-        # Calculate the new net worth
-        self.net_worth = self.balance + self.btc_held * current_price
-        
-        obs = self._get_observation()
-        return obs, reward, self.done, {}
 
-    def render(self, mode='human'):
+        return self._get_obs(), reward, self.done, {}
+
+    def _calculate_transaction_cost(self, action, price):
+        if action in [1, 2]:  # Buying or selling
+            amount = self.current_capital if action == 1 else self.bitcoin_holdings * price
+            return amount * self.transaction_fee
+        return 0
+
+    def reset(self):
+        self.current_step = self.window_size - 1
+        self.current_capital = self.initial_capital
+        self.bitcoin_holdings = 0
+        self.done = False
+        self.last_total_asset_value = self.initial_capital
+        return self._get_obs()
+
+    def _get_obs(self):
+        return np.concatenate([self.data.iloc[self.current_step - self.window_size + 1: self.current_step + 1].values.flatten()])
+
+    def render(self, mode='human', close=False):
         print(f'Step: {self.current_step}')
-        print(f'Balance: {self.balance}')
-        print(f'BTC Held: {self.btc_held}')
-        print(f'Net Worth: {self.net_worth}')
+        print(f'Capital: {self.current_capital}')
+        print(f'Bitcoin Holdings: {self.bitcoin_holdings}')
 
-    def _get_observation(self):
-        window_data = self.data.iloc[self.current_step-self.window_size:self.current_step].copy()
-        obs = np.concatenate((window_data.values, [[self.balance, self.btc_held, self.net_worth]] * self.window_size), axis=1)
-        return obs
-
-    def _buy(self, price):
-        if self.balance > 0:
-            btc_bought = (self.balance / price) * (1 - self.transaction_fee)
-            self.btc_held += btc_bought
-            self.balance = 0
-            return btc_bought * price  # Replace with actual reward calculation if needed
-        return 0
-
-    def _sell(self, price):
-        if self.btc_held > 0:
-            btc_sold = self.btc_held
-            self.balance += btc_sold * price * (1 - self.transaction_fee)
-            self.btc_held = 0
-            return btc_sold * price  # Replace with actual reward calculation if needed
-        return 0
 
 
 if __name__ == "__main__":
