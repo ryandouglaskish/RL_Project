@@ -2,4 +2,7 @@ venv/
 data/*
 viz/eda/*
 viz/experiments/*
+experiments/*
 *__pycache__*
+*.pyc
+*.DS_Store*

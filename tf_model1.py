@@ -30,6 +30,7 @@ class DQNAgent:
         self.model = self._build_model()
         self.target_model = self._build_model()
         self.update_target_model()
+        self.losses = []
 
     def _build_model(self):
         model = DQN(self.state_size, self.action_size)
@@ -64,7 +65,8 @@ class DQNAgent:
             state = tf.convert_to_tensor(state, dtype=tf.float32)
             target_f = self.model.predict(state, verbose=0)
             target_f[0][action] = target
-            self.model.fit(state, target_f, epochs=1, verbose=0)
+            history = self.model.fit(state, target_f, epochs=1, verbose=0)  # Suppress output by setting verbose=0
+            self.losses.append(history.history['loss'][0])  # Capture the loss value
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 

@@ -12,3 +12,5 @@ https://www.youtube.com/watch?v=YLa_KkehvGw
 
 # Implementation decisions
 0.000030 is minimum bitcoin transaction, since coinbase minimum is $2, and current bitcoin conversion is 0.000030
+
+- is it a good idea to randomize the start of each episode?
