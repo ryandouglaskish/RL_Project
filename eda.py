@@ -3,9 +3,7 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# ANSI escape codes for cyan
-CYAN = "\033[96m"
-RESET = "\033[0m"
+from ansi import cyan, orange
 
 RAW_DATA_PATH = 'data/raw'
 
@@ -24,6 +22,8 @@ if __name__ == '__main__':
     if not os.path.exists('viz/eda'):
         os.makedirs('viz/eda')
 
+    n_samples = 0
+
     for file in os.listdir(RAW_DATA_PATH):
         if file.endswith('.csv'):
             df = pd.read_csv(os.path.join(RAW_DATA_PATH, file))
@@ -31,10 +31,12 @@ if __name__ == '__main__':
             df.set_index('date', inplace=True)
 
             year = get_year(file)
-            print(CYAN + 'Year: ' + year + RESET)
+            cyan('Year: ' + year)
             print('Missing values: ', df.isna().sum().sum())
             for field in ['open','high','low','close','Volume BTC']:
                 plot_versus_date(df, 'date', field, year)
                 print(f"Plotting {field} versus date")
             print()
-            
+
+            n_samples += len(df)
+    orange('Total number of samples: ' + f"{n_samples:,}")
