@@ -80,6 +80,13 @@ def train_dqn_agent(opt):
 
         if (e) % 10 == 0:
             agent.save(f"experiments/{opt.experiment_id}/model_weights_{e}.pth")
+            # save performance metrics as pd dataframe
+            episode_performances_df = pd.DataFrame({'episode_rewards': episode_rewards,
+                                        'episode_net_worths': episode_net_worths,
+                                        'episode_capitals': episode_capitals,
+                                        'episode_holdings': episode_holdings})
+            episode_performances_df.to_csv(f"experiments/{opt.experiment_id}/episode_performances_{e}.csv", index=False)
+
 
     # Save final model weights
     agent.save(f"experiments/{opt.experiment_id}/model_weights_{start_episode + episodes}.pth")
@@ -127,13 +134,6 @@ def train_dqn_agent(opt):
     plt.tight_layout()
     plt.savefig(f"experiments/{opt.experiment_id}/performance_plot_{e}.png")
     plt.close()
-
-    # save performance metrics as pd dataframe
-    episode_performances_df = pd.DataFrame({'episode_rewards': episode_rewards,
-                                   'episode_net_worths': episode_net_worths,
-                                   'episode_capitals': episode_capitals,
-                                   'episode_holdings': episode_holdings})
-    episode_performances_df.to_csv(f"experiments/{opt.experiment_id}/episode_performances_{e}.csv", index=False)
 
     orange(f"Training took {time.time() - start_time} seconds")
 
