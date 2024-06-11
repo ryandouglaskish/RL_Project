@@ -1,8 +1,5 @@
 # RL_Project
 
-
-YOUTUBE VIDEO: https://youtu.be/yo82idPFMbk
-
 **Create virtual enviornment**
 `$ python -m venv venv`
 `$ source venv/bin/activate`
